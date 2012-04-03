@@ -16,19 +16,17 @@ class SiriProxy
   
   def initialize(config)
     @config = config
-    #Lets make the Ctrl+C a little more user friendly
-    trap("INT") {quit_on_int}
-    def quit_on_int
-      puts "\nTerminating TLP version [#{SiriProxy::VERSION}]"
-      puts "Done, bye bye!!!"
+    log = @config.log
+
+    trap("INT") do
+      @log.info "Terminating TLP version [#{SiriProxy::VERSION}]"
+      @log.info "Done, bye bye!!!"
+
       exit
     end
-    
-    
-    # @todo shouldnt need this, make centralize logging instead
-    $LOG_LEVEL = @config.log_level
+
     #Version support added
-    puts "Initializing TLP version [#{SiriProxy::VERSION}]"
+    @log.info "Initializing TLP version [#{SiriProxy::VERSION}]"
 
     #Initialization of event machine variables overider +epoll mode on by default
 EM.epoll
@@ -80,20 +78,20 @@ EM.epoll
 
     #Print email config
     if @config.send_email
-      puts '[Info - SiriProxy] Email notifications are [ON]!'
+      @log.info 'Email notifications are [ON]!'
     else
-      puts '[Info - SiriProxy] Email notifications are [OFF]!'
+      @log.info 'Email notifications are [OFF]!'
     end
     
     #Print the server if its publc or not
     if @config.private_server
-      puts '[Info - SiriProxy] Private Server [ON]!'
+      @log.info 'Private Server [ON]!'
     else
-      puts '[Info - SiriProxy] Private Server [OFF]!'
+      @log.info 'Private Server [OFF]!'
     end
     #Set default to revent errors.
     if @config.happy_hour_countdown==nil
-      puts '[Info - SiriProxy] Happy Hour Countdown not set in config.yml. Using default'
+      @log.info('Happy Hour') { 'Countdown not set in config.yml. Using default' }
       @config.happy_hour_countdown = 21600
     end
     #Start The EventMacine
@@ -101,36 +99,35 @@ EM.epoll
       begin
         port = @config.port
 
-        puts "Starting SiriProxy on port #{port}.."
+        @log.info "Starting SiriProxy on port #{port}.."
         EventMachine::start_server('0.0.0.0', port, SiriProxy::Connection::Iphone, @config) { |conn|
-          $stderr.puts "start conn #{conn.inspect}" if $LOG_LEVEL > 3
+          @log.debug "start conn #{conn.inspect}"
           conn.plugin_manager = SiriProxy::PluginManager.new(@config)
           conn.plugin_manager.iphone_conn = conn
         }
-   
-        puts "Server is Up and Running"
+
+        @log.info "Server is Up and Running"
         @timer=5 # set the timer value
         @timer2=60 # The expirer
         @timer3=900 # the expirer of old assistnats
         #
         #Temp fix and guard to apple not replying command failed
          EventMachine::PeriodicTimer.new(@timer2){
-            puts "[Expirer - SiriProxy] Expiring past 20 hour Keys"
+           @log.info("Expirer") { "Expiring past 20 hour Keys" }
            @totalkeysexpired = @key_dao.expire_24h_hour_keys
-           puts @totalkeysexpired
+           @log.info("Expirer") { "Expired #{@totalkeysexpired} keys" }
            for i in (0...@totalkeysexpired)
                sendemail(@config)
            end
           
            @keystatistics_dao.delete_keystats
-            puts "[Stats - SiriProxy] Cleaning up key statistics"
-           
+           @log.info("Stats") { "Cleaning up key statistics" }
          }
          
         #Delete old assistants. If i am not mistaken each assistant is valid for only 7 days.
         #Delete 14 days assistants for database cleaning
 # EventMachine::PeriodicTimer.new(@timer3){
-# puts "[Expirer - SiriProxy] DELETING past 14 DAYS Assistants"
+# log.info "[Expirer] DELETING past 14 DAYS Assistants"
 # @assistant_dao.delete_expired_assistants
 # }
         
@@ -151,12 +148,12 @@ EM.epoll
           if statistics.happy_hour_elapsed > @config.happy_hour_countdown and @config.enable_auto_key_ban and @unbanned == false
             @key_dao.unban_keys
            @unbanned=true
-            puts "[Happy hour - SiriProxy] Unbanning Keys and Doors are open"
+            @log.info("Happy hour") { "Unbanning Keys and Doors are open" }
           end
           #only when autokeyban is on
           if statistics.happy_hour_elapsed > (@config.happy_hour_countdown + 300) and @config.enable_auto_key_ban and @unbanned == true
             @key_dao.ban_keys
-            puts "[Happy hour - SiriProxy] Banning Keys and Doors are Closed"
+            @log.info("Happy hour") { "Banning Keys and Doors are Closed" }
             statistics.happy_hour_elapsed = 0
             @unbanned=false
           end
@@ -169,7 +166,7 @@ EM.epoll
                 @oldkeyload=@overloaded_keys[i].keyload
                 @overloaded_keys[i].keyload = @overloaded_keys[i].keyload - @conf.keyload_dropdown
                 @key_dao.setkeyload(@overloaded_keys[i])
-                puts "[Keys - SiriProxy] Decreasing Keyload for Key id=[#{@overloaded_keys[i].id}] and Decreasing keyload from [#{@oldkeyload}] to [#{@overloaded_keys[i].keyload}]"
+                @log.info("Keys") { "Decreasing Keyload for Key id=[#{@overloaded_keys[i].id}] and Decreasing keyload from [#{@oldkeyload}] to [#{@overloaded_keys[i].keyload}]" }
               end
             end
             statistics.elapsed = 0
@@ -186,13 +183,15 @@ EM.epoll
           elsif @availablekeys>0
             @max_connections = @conf.max_connections * @availablekeys
           end
-          puts "[Info - SiriProxy] Uptime [#{statistics.uptime}] Active connections [#{@conf.active_connections}] Max connections [#{@max_connections}]"
+          @log.info "Uptime [#{statistics.uptime}] Active connections [#{@conf.active_connections}] Max connections [#{@max_connections}]"
           
         }
         EventMachine::PeriodicTimer.new(@conf.keyload_dropdown_interval){ #fix for server crash
           
         }
       rescue RuntimeError => err
+        @log.fatal "unable to create server: #{err} #{err.class}"
+
         if err.message == "no acceptor"
           raise "Cannot start the server on port #{port} - are you root, or have another process on this port already?"
         else

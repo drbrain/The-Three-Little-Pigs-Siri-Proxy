@@ -1,8 +1,7 @@
 require 'optparse'
 require 'yaml'
 require 'ostruct'
-
-
+require 'logger'
 
 # @todo want to make SiriProxy::Commandline without having to
 # require 'siriproxy'. Im sure theres a better way.
@@ -53,7 +52,7 @@ class SiriProxy::CommandLine
     
   def run_console
     load_code
-    $LOG_LEVEL = 0 
+    @log.level = 0
     # this is ugly, but works for now
     SiriProxy::PluginManager.class_eval do
       def respond(text, options={})
@@ -263,13 +262,16 @@ class SiriProxy::CommandLine
   def parse_options
     config_yml = File.expand_path('~/.siriproxy/config.yml')
     @config = OpenStruct.new(YAML.load_file(config_yml))
+
+    @config.log = Logger.new $stderr
     @branch = nil
+
     @option_parser = OptionParser.new do |opts|
       opts.on('-p', '--port PORT',     '[server]   port number for server (central or node)') do |port_num|
         @config.port = port_num.to_i
       end
       opts.on('-l', '--log LOG_LEVEL', '[server]   The level of debug information displayed (higher is more)') do |log_level|
-        @config.log_level = log_level.to_i
+        @config.log.level = log_level.to_i
       end
       opts.on('-b', '--branch BRANCH', '[update]   Choose the branch to update from (default: master)') do |branch|
         @branch = branch

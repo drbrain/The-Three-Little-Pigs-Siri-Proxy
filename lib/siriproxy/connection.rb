@@ -48,10 +48,10 @@ class SiriProxy::Connection < EventMachine::Connection
     @commandFailed=false
     @finishspeech=false
     @GetSessionCertificateResponse=false #send only by apple or server
-    puts "[Info - SiriProxy] Created a connection!" 
+    @log.info "Created a connection!"
     
     #self.pending_connect_timeout=5
-    #puts pending_connect_timeout()    
+    #@log.info "Pending connection timeout #{pending_connect_timeout}"
     self.comm_inactivity_timeout=240 #very important and also depends on how many people connect!!!
     ##Checks For avalible keys before any object is loaded
     available_keys = @key_dao.list4Skeys().count
@@ -89,18 +89,18 @@ class SiriProxy::Connection < EventMachine::Connection
       key4s.expired='False'
       key4s.iPad3='False'
       if @key_dao.check_duplicate(key4s)
-        puts "[Info - SiriProxy] Duplicate Validation Data. Key NOT saved"
+        @log.info "Duplicate Validation Data. Key NOT saved"
       else
         @key_dao.insert(key4s)
-        puts "[Info - SiriProxy] Keys written to Database"        
+        @log.info "Keys written to Database"
         #also unban all keys available.
         if @config.private_server
           @key_dao.unban_keys #unBan because a key was inserted! should spoof enough
-          puts "[Info - SiriProxy] New 4S Key added and keys set to unbanned"
+          @log.info "New 4S Key added and keys set to unbanned"
         end
       end
     else
-      puts "[Info - SiriProxy] Something went wrong. Please file this bug. Key NOT saved!"
+      @log.error "Something went wrong. Please file this bug. Key NOT saved!"
     end
     
   end 
@@ -128,18 +128,18 @@ def checkHaveiPad3Data(object)
       keyiPad3.expired='False'
       keyiPad3.iPad3='True'
       if @key_dao.check_duplicate(keyiPad3)
-        puts "[Info - SiriProxy] Duplicate Validation Data. Key NOT saved"
+        @log.info "Duplicate Validation Data. Key NOT saved"
       else
         @key_dao.insert(keyiPad3)
-        puts "[Info - SiriProxy] Keys written to Database"        
+        @log.info "Keys written to Database"        
         #also unban all keys available.
         if @config.private_server
           @key_dao.unban_keys #unBan because a key was inserted! should spoof enough
-          puts "[Info - SiriProxy] New iPad 3 Key added and keys set to unbanned"
+          @log.info "New iPad 3 Key added and keys set to unbanned"
         end
       end
     else
-      puts "[Info - SiriProxy] Something went wrong. Please file this bug. Key NOT saved!"
+      @log.error "Something went wrong. Please file this bug. Key NOT saved!"
     end
     
   end  
@@ -156,20 +156,20 @@ def checkHaveiPad3Data(object)
         
         if @available_keys > 0 and @key_dao.next_available_4S_for_new_assistant != nil 
           
-          puts "[Key - SiriProxy] Keys available for Creation of Assistants [#{@available_keys}]"
+          @log.info "Keys" { "Keys available for Creation of Assistants [#{@available_keys}]" }
           @key = @key_dao.next_available_4S_for_new_assistant
-          puts "[Keys - SiriProxy] Key [#{@key.id}] Loaded from Database for Validation Data" 
-          puts "[Keys - SiriProxy] Key [#{@key.id}] Loaded from Database for Validation Data For Object with aceid [#{object["aceId"]}] and class #{object["class"]}" if $LOG_LEVEL > 2
+          @log.info "Keys" { "Key [#{@key.id}] Loaded from Database for Validation Data" }
+          @log.debug "Keys" { "Key [#{@key.id}] Loaded from Database for Validation Data For Object with aceid [#{object["aceId"]}] and class #{object["class"]}" }
           @oldkeyload=@key.keyload          
           @key.keyload=@key.keyload+20  
           @key_dao.setkeyload(@key)
-          puts "[Key - SiriProxy] Key with id[#{@key.id}] increased it's keyload from [#{@oldkeyload}] to [#{@key.keyload}]" 
+          @log.info "Keys" { "Key with id[#{@key.id}] increased it's keyload from [#{@oldkeyload}] to [#{@key.keyload}]" }
           self.sessionValidationData= @key.sessionValidation	
           self.validationData_avail = true       
           
         else 
           
-          puts "[Key - SiriProxy] No keys available in database Closing connections"          
+          @log.info "Keys" { "No keys available in database Closing connections" }
           self.validationData_avail = false
           self.close_connection() #close connections
           self.other_connection.close_connection() #close other
@@ -197,12 +197,12 @@ def checkHaveiPad3Data(object)
           if  @userassistant!=nil #If there is one then
             
             @userassistant.last_ip=@clientip
-            puts "[Authentification - SiriProxy] Registered Assistant Found "
+            @log.info "Authentification" { "Registered Assistant Found" }
             @user = @clients_dao.find_by_assistant(@userassistant)
             
             if @user==nil #Incase this user doesnt exist!!!!!!! Bug or not complete transaction
                 
-              puts "[Authentification - SiriProxy] No client for Assistant [#{@loadedassistant}]  Found :-("
+              @log.info "Authentification" { "No client for Assistant [#{@loadedassistant}]  Found :-(" }
               self.validationData_avail = false
               self.close_connection() #close connections
               self.other_connection.close_connection() #close other
@@ -211,7 +211,7 @@ def checkHaveiPad3Data(object)
             elsif @user.valid=='False' 
               
               @assistant_dao.updateassistant(@userassistant) # to update with last login and ip
-              puts "[Authentification - SiriProxy] Access Denied!! -> Client name:[#{@user.fname}] nickname[#{@user.nickname}] appleid[#{@user.appleAccountid}] Connected "
+              @log.info "Authentification" { "Access Denied!! -> Client name:[#{@user.fname}] nickname[#{@user.nickname}] appleid[#{@user.appleAccountid}] Connected" }
               self.validationData_avail = false
               self.close_connection() #close connections
               self.other_connection.close_connection() #close other Here needs fake mode
@@ -223,10 +223,10 @@ def checkHaveiPad3Data(object)
               @available_keys = @key_dao.list4Skeys.count      
               
               if (@available_keys) > 0
-                puts "[Key - SiriProxy] Keys available for Registered Only clients [#{@available_keys}]"
+                @log.info "Keys" { "Keys available for Registered Only clients [#{@available_keys}]" }
                 @key = @key_dao.next_available_4S
-                puts "[Keys - SiriProxy] Key [#{@key.id}] Loaded from Database for Validation Data" 
-                puts "[Keys - SiriProxy] Key [#{@key.id}] Loaded from Database for Validation Data For Object with aceid [#{object["aceId"]}] and class #{object["class"]}" if $LOG_LEVEL > 2
+                @log.info "Keys" { "Key [#{@key.id}] Loaded from Database for Validation Data" }
+                @log.debug "Keys" { "Key [#{@key.id}] Loaded from Database for Validation Data For Object with aceid [#{object["aceId"]}] and class #{object["class"]}" }
                 @oldkeyload=@key.keyload          
                 @key.keyload=@key.keyload+10  
                 @key_dao.setkeyload(@key) 
@@ -236,7 +236,7 @@ def checkHaveiPad3Data(object)
                 
               else 
                 
-                puts "[Key - SiriProxy] No 4S keys available in database Closing connections"
+                @log.info "Keys" { "No 4S keys available in database Closing connections" }
                 self.validationData_avail = false
                 self.close_connection() #close connections
                 self.other_connection.close_connection() #close other
@@ -245,7 +245,7 @@ def checkHaveiPad3Data(object)
               end
                 
               @assistant_dao.updateassistant(@userassistant)
-              puts "[Authentification - SiriProxy] Access Granted! -> Client name:[#{@user.fname}] nickname[#{@user.nickname}] appleid[#{@user.appleAccountid}] Connected "
+              @log.info "Authentification" { "Access Granted! -> Client name:[#{@user.fname}] nickname[#{@user.nickname}] appleid[#{@user.appleAccountid}] Connected" }
               
             end
             
@@ -253,7 +253,7 @@ def checkHaveiPad3Data(object)
             
             if @config.private_server
               
-              puts "[Authentification - SiriProxy] Assistant [#{@loadedassistant}] is not registered. Banning Connection"
+              @log.info "Authentification" { "Assistant [#{@loadedassistant}] is not registered. Banning Connection" }
               self.validationData_avail = false
               self.close_connection() #close connections
               self.other_connection.close_connection() #close other
@@ -266,20 +266,20 @@ def checkHaveiPad3Data(object)
               
               if (@available_keys) > 0
                 
-                puts "[Key - SiriProxy] Keys available for Public  [#{@available_keys}]"
+                @log.info "Keys" { "Keys available for Public  [#{@available_keys}]" }
                 @key = @key_dao.next_available_4S
-                puts "[Keys - SiriProxy] Key [#{@key.id}] Loaded from Database for Validation Data" 
-                puts "[Keys - SiriProxy] Key [#{@key.id}] Loaded from Database for Validation Data For Object with aceid [#{object["aceId"]}] and class #{object["class"]}" if $LOG_LEVEL > 2
+                @log.info "Keys" { "Key [#{@key.id}] Loaded from Database for Validation Data" }
+                @log.debug "Keys" { "Key [#{@key.id}] Loaded from Database for Validation Data For Object with aceid [#{object["aceId"]}] and class #{object["class"]}" }
                 @oldkeyload=@key.keyload          
                 @key.keyload=@key.keyload+10  
                 @key_dao.setkeyload(@key)
-                puts "[Key - SiriProxy] Key with id[#{@key.id}] increased it's keyload from [#{@oldkeyload}] to [#{@key.keyload}]" 
+                @log.info "Keys" { "Key with id[#{@key.id}] increased it's keyload from [#{@oldkeyload}] to [#{@key.keyload}]" }
                 self.sessionValidationData= @key.sessionValidation	
                 self.validationData_avail = true  
                 
               else 
                 
-                puts "[Key - SiriProxy] No keys available in database Closing connections"
+                @log.info "Keys" { "No keys available in database Closing connections" }
                 self.validationData_avail = false
                 self.close_connection() #close connections
                 self.other_connection.close_connection() #close other
@@ -299,20 +299,20 @@ def checkHaveiPad3Data(object)
           
           if (@available_keys) > 0
                 
-            puts "[Key - SiriProxy] Keys available for Public and Other than load and create assistant [#{@available_keys}]"
+            @log.info "Keys" { "Keys available for Public and Other than load and create assistant [#{@available_keys}]" }
             @key = @key_dao.next_available_4S
-            puts "[Keys - SiriProxy] Key [#{@key.id}] Loaded from Database for Validation Data" 
-            puts "[Keys - SiriProxy] Key [#{@key.id}] Loaded from Database for Validation Data For Object with aceid [#{object["aceId"]}] and class #{object["class"]}" if $LOG_LEVEL > 2
+            @log.info "Keys" { " Key [#{@key.id}] Loaded from Database for Validation Data" }
+            @log.debug "Keys" { "Key [#{@key.id}] Loaded from Database for Validation Data For Object with aceid [#{object["aceId"]}] and class #{object["class"]}" }
             @oldkeyload=@key.keyload          
             @key.keyload=@key.keyload+10  
             @key_dao.setkeyload(@key) 
-            puts "[Key - SiriProxy] Key with id[#{@key.id}] increased it's keyload from [#{@oldkeyload}] to [#{@key.keyload}]" 
+            @log.info "Keys" { "Key with id[#{@key.id}] increased it's keyload from [#{@oldkeyload}] to [#{@key.keyload}]" }
             self.sessionValidationData= @key.sessionValidation	
             self.validationData_avail = true  
                 
           else 
                
-            puts "[Key - SiriProxy] No keys available in database Closing connections"
+            @log.debug "Keys" { "No keys available in database Closing connections" }
             self.validationData_avail = false
             self.close_connection() #close connections
             self.other_connection.close_connection() #close other
@@ -324,7 +324,7 @@ def checkHaveiPad3Data(object)
       
       #rescue SystemCallError,NoMethodError
     rescue SystemCallError
-      puts "[ERROR - SiriProxy] Error opening the sessionValidationData  file. Connect an iPhone4S first or create them manually!"
+      @log.error "Error opening the sessionValidationData  file. Connect an iPhone4S first or create them manually!"
     end
 	end  
   
@@ -343,13 +343,13 @@ def checkHaveiPad3Data(object)
   end
   
   def receive_line(line) #Process header    
-    puts "[Header - #{self.name}] #{line}" if $LOG_LEVEL > 2
+    @log.debug "Header" { "#{@name} received #{line}" }
     if(line == "") #empty line indicates end of headers
-      puts "[Debug - #{self.name}] Found end of headers" if $LOG_LEVEL > 3
+      @log.debug "Header" { "#{@name} found end of headers" }
       set_binary_mode
       self.processed_headers = true
       if self.name=="Guzzoni" 
-        puts "   @connectionfromguzzoni=true "
+        @log.info "Header" { "@connectionfromguzzoni=true" }
         @connectionfromguzzoni=true
       end
       ##############
@@ -363,36 +363,28 @@ def checkHaveiPad3Data(object)
       #if its and iphone4s
       self.clientport, self.clientip = Socket.unpack_sockaddr_in(get_peername) 
 			if line.match(/iPhone4,1;/)
-        puts "[RollEyes - Siri*-*Proxy]" 
-        puts "[Info - SiriProxy] iPhone 4S connected from IP #{self.clientip}"        
-        puts "[RollEyes - Siri*-*Proxy]" 
+        @log.info "iPhone 4S connected from IP #{self.clientip}"
 	self.is_4S = true
 	self.is_iPad3 = false
         @devicetype="iPhone4S"
       elsif line.match(/iPad3,1;/)
-        puts "[RollEyes - Siri*-*Proxy]" 
-        puts "[Info - SiriProxy] iPad 3 Wi-Fi only connected from IP #{self.clientip}"        
-        puts "[RollEyes - Siri*-*Proxy]" 
+        @log.info "iPad 3 Wi-Fi only connected from IP #{self.clientip}"
 	self.is_4S = false
 	self.is_iPad3 = true
         @devicetype="iPad 3 Wi-Fi only"
       elsif line.match(/iPad3,2;/)
-        puts "[RollEyes - Siri*-*Proxy]" 
-        puts "[Info - SiriProxy] iPad 3 CDMA connected from IP #{self.clientip}"        
-        puts "[RollEyes - Siri*-*Proxy]" 
+        @log.info "iPad 3 CDMA connected from IP #{self.clientip}"
 	self.is_4S = false
 	self.is_iPad3 = true
         @devicetype="iPad 3 CDMA"
       elsif line.match(/iPad3,3;/)
-        puts "[RollEyes - Siri*-*Proxy]" 
-        puts "[Info - SiriProxy] iPad 3 GSM connected from IP #{self.clientip}"        
-        puts "[RollEyes - Siri*-*Proxy]" 
+        @log.info "iPad 3 GSM connected from IP #{self.clientip}"
 	self.is_4S = false
 	self.is_iPad3 = true
         @devicetype="iPad 3 GSM"
       else # now seperates anything else exept 4s
         #we can close connections here .... and we can count them here       
-        puts "[Info - Siriproxy] Curent connections [#{@conf.active_connections}]"
+        @log.info "Curent connections [#{@conf.active_connections}]"
         #Some code in order connections to depend on the evailable keys
         #if no keys then maximize the connections in order to prevent max connection reach and 4s not be able to connect
         #
@@ -408,83 +400,83 @@ def checkHaveiPad3Data(object)
         if @conf.active_connections >= @max_connections 
           self.close_connection() #close connections
           self.other_connection.close_connection() #close other          
-          puts "[Warning - Siriproxy] Max Connections reached! Connections Closed...."
+          @log.warn "Max Connections reached! Connections Closed...."
         end
         if  line.match(/iPhone3,1;/)
           #if its iphone4,etc	 			
           self.is_4S = false	
           self.is_iPad3 = false
           @devicetype="GSM iPhone4"
-          puts "[Info - SiriProxy] GSM iPhone 4 connected from IP #{self.clientip}"
-          puts "[Info - SiriProxy] Original Header: " + line if $LOG_LEVEL > 2
+          @log.info "GSM iPhone 4 connected from IP #{self.clientip}"
+          @log.debug "Original Header: #{line}"
           line["iPhone3,1"] = "iPhone4,1"
-          puts "[Info - SiriProxy] Changed header to iphone4s "
-          puts "[Info - SiriProxy] Original Header: " + line if $LOG_LEVEL > 2      
+          @log.info "Changed header to iphone4s"
+          @log.debug "Original Header: #{line}"
         elsif  line.match(/iPhone3,3;/)
           self.is_4S = false				
           self.is_iPad3 = false
           @devicetype="CDMA iPhone4"
-          puts "[Info - SiriProxy] CDMA iPhone 4 connected from IP #{self.clientip}"
-          puts "[Info - SiriProxy] Original Header: " + line if $LOG_LEVEL > 2
+          @log.info "CDMA iPhone 4 connected from IP #{self.clientip}"
+          @log.debug "Original Header: #{line}"
           line["iPhone3,3"] = "iPhone4,1"
-          puts "[Info - SiriProxy] Changed header to iphone4s "
-          puts "[Info - SiriProxy] Original Header: " + line if $LOG_LEVEL > 2
+          @log.info "Changed header to iphone4s"
+          @log.debug "Original Header: #{line}"
         elsif line.match(/iPad2,1;/)	
           self.is_4S = false				
           self.is_iPad3 = false
           @devicetype="iPad2 Wifi Only"
-          puts "[Info - SiriProxy] iPad2 Wifi Only connected from IP #{self.clientip}"						
-          puts "[Info - SiriProxy] Original Header: " + line if $LOG_LEVEL > 2
+          @log.info "iPad2 Wifi Only connected from IP #{self.clientip}"
+          @log.debug "Original Header: #{line}"
           line["iPad/iPad2,1"] = "iPhone/iPhone4,1"
-          puts "[Info - SiriProxy] Changed header to iphone4s "
-          puts "[Info - SiriProxy] Original Header: " + line if $LOG_LEVEL > 2				
+          @log.info "Changed header to iphone4s"
+          @log.debug "Original Header: #{line}"
         elsif line.match(/iPad2,2;/)	
           self.is_4S = false				
           self.is_iPad3 = false
           @devicetype="iPad2 GSM"
-          puts "[Info - SiriProxy] iPad2 GSM connected from IP #{self.clientip}"						
-          puts "[Info - SiriProxy] Original Header: " + line if $LOG_LEVEL > 2
+          @log.info "iPad2 GSM connected from IP #{self.clientip}"
+          @log.debug "Original Header: #{line}"
           line["iPad/iPad2,2"] = "iPhone/iPhone4,1"
-          puts "[Info - SiriProxy] Changed header to iphone4s "
-          puts "[Info - SiriProxy] Original Header: " + line if $LOG_LEVEL > 2				
+          @log.info "Changed header to iphone4s"
+          @log.debug "Original Header: #{line}"
         elsif line.match(/iPad2,3;/)	
           self.is_4S = false				
           self.is_iPad3 = false
           @devicetype="iPad2 CDMA"
-          puts "[Info - SiriProxy] iPad2 CDMA connected from IP #{self.clientip}"						
-          puts "[Info - SiriProxy] Original Header: " + line if $LOG_LEVEL > 2
+          @log.info "iPad2 CDMA connected from IP #{self.clientip}"
+          @log.debug "Original Header: #{line}"
           line["iPad/iPad2,3"] = "iPhone/iPhone4,1"
-          puts "[Info - SiriProxy] Changed header to iphone4s "
-          puts "[Info - SiriProxy] Original Header: " + line if $LOG_LEVEL > 2				
+          @log.info "Changed header to iphone4s"
+          @log.debug "Original Header: #{line}"
         elsif line.match(/iPad1,1;/)		
           self.is_4S = false		
           self.is_iPad3 = false
           @devicetype="iPad 1st generation"
-          puts "[Info - SiriProxy] iPad 1st generation connected from IP #{self.clientip}"						
-          puts "[Info - SiriProxy] Original Header: " + line if $LOG_LEVEL > 2
+          @log.info "iPad 1st generation connected from IP #{self.clientip}"
+          @log.debug "Original Header: #{line}"
           line["iPad/iPad1,1"] = "iPhone/iPhone4,1"
-          puts "[Info - SiriProxy] Changed header to iphone4s "
-          puts "[Info - SiriProxy] Original Header: " + line if $LOG_LEVEL > 2				
+          @log.info "Changed header to iphone4s"
+          @log.debug "Original Header: #{line}"
         elsif line.match(/iPod4,1;/)		
           self.is_4S = false	
           self.is_iPad3 = false
           @devicetype="iPod touch 4th generation"
-          puts "[Info - SiriProxy] iPod touch 4th generation connected from IP #{self.clientip}"					
-          puts "[Info - SiriProxy] Original Header: " + line if $LOG_LEVEL > 2
+          @log.info "iPod touch 4th generation connected from IP #{self.clientip}"
+          @log.debug "Original Header: #{line}"
           line["iPod touch/iPod4,1"] = "iPhone/iPhone4,1"
-          puts "[Info - SiriProxy] Changed header to iphone4s "
-          puts "[Info - SiriProxy] Original Header: " + line if $LOG_LEVEL > 2
+          @log.info "Changed header to iphone4s"
+          @log.debug "Original Header: #{line}"
         else
           #Everithing else like android devices, computer apps etc        
           #Change unknown to iPhone to make sure everything works..
-          puts "[Info - SiriProxy] Unknow Device Connected from IP #{self.clientip}"	
+          @log.debug "Unknown Device Connected from IP #{self.clientip}"
           self.is_4S = false
           self.is_iPad3 = false
           @devicetype="Unknown Device"
-          puts "[Info - SiriProxy] Original Header: " + line if $LOG_LEVEL > 2
+          @log.info "Original Header: #{line}"
           line = "User-Agent: Assistant(iPhone/iPhone4,1; iPhone OS/5.0.1/9A405) Ace/1.0"
-          puts "[Info - SiriProxy] Changed header to iphone4s "
-          puts "[Info - SiriProxy] Original Header: " + line if $LOG_LEVEL > 2				
+          @log.info "Changed header to iphone4s"
+          @log.info "Original Header: #{line}"
         end
       end
     end    
@@ -513,27 +505,25 @@ def checkHaveiPad3Data(object)
     return if output_buffer.empty?
   
     if other_connection.ssled
-      puts "[Debug - #{self.name}] Forwarding #{self.output_buffer.length} bytes of data to #{other_connection.name}" if $LOG_LEVEL > 5
-      #puts  self.output_buffer.to_hex if $LOG_LEVEL > 5
+      @log.debug "#{@name} Forwarding #{self.output_buffer.length} bytes of data to #{other_connection.name}"
       other_connection.send_data(output_buffer)
       self.output_buffer = ""
     else
-      puts "[Debug - #{self.name}] Buffering some data for later (#{self.output_buffer.length} bytes buffered)" if $LOG_LEVEL > 5
-      #puts  self.output_buffer.to_hex if $LOG_LEVEL > 5
+      @log.debug "#{@name} Buffering some data for later (#{self.output_buffer.length} bytes buffered)"
     end
   end
 
   def process_compressed_data    
     begin
       self.unzipped_input << unzip_stream.inflate(self.input_buffer)
-    rescue	
-      puts "[Warning - SiriProxy] Currupted Data!!! Clearing buffer!"
+    rescue => e
+      @log.warn "Corrupt data, clearing buffer: #{e} (#{e.class})"
       self.unzipped_input = ""
     end
     self.input_buffer = ""
-    puts "========UNZIPPED DATA (from #{self.name} =========" if $LOG_LEVEL > 5
-    puts unzipped_input.to_hex if $LOG_LEVEL > 5
-    puts "==================================================" if $LOG_LEVEL > 5
+    @log.debug "========UNZIPPED DATA (from #{self.name} ========="
+    @log.debug unzipped_input.to_hex
+    @log.debug "=================================================="
     
     while(self.has_next_object?)
       object = read_next_object_from_unzipped()
@@ -552,13 +542,13 @@ def checkHaveiPad3Data(object)
     return true if(unpacked.match(/^0[34]/)) #Ping or pong
     begin
       if unpacked.match(/^[0-9][15-9]/)
-        puts "ROGUE PACKET!!! WHAT IS IT?! TELL US!!! IN IRC!! COPY THE STUFF FROM BELOW"
-        puts unpacked.to_hex
+        @log.warn "ROGUE PACKET!!! WHAT IS IT?! TELL US!!! IN IRC!! COPY THE STUFF FROM BELOW"
+        @log.warn unpacked.to_hex
       end 
       objectLength = unpacked.match(/^0200(.{6})/)[1].to_i(16)
       return ((objectLength + 5) < unzipped_input.length) #determine if the length of the next object (plus its prefix) is less than the input buffer
-    rescue 
-      puts "[Bug - SiriProxy] Please contact me about this"
+    rescue => e
+      @log.error "Please contact me about this: #{e.message} (#{e.class})"
     end
   end
 
@@ -573,31 +563,31 @@ def checkHaveiPad3Data(object)
     info = unpacked.match(/^0(.)(.{8})$/) #some times this doesnt match! needs 10 chars !!!
    
     if unpacked==nil
-      $stderr.puts "bug flash on unpacked"     
+      @log.error "bug flash on unpacked"
     end
     
     if info==nil
-      $stderr.puts "bug flash on info"      #here lies the stupid bug!!!!!!!!!!!!!!!
-      $stderr.puts unpacked
+      @log.error "bug flash on info" #here lies the stupid bug!!!!!!!!!!!!!!!
+      @log.error unpacked
       
       #object=nil
       #return object
     end
     if info!=nil #lets hope for the magic fix
       if(info[1] == "3" || info[1] == "4"  ) #Ping or pong -- just get these out of the way (and log them for good measure)
-        #puts "Ping Pong #{unpacked}"
+        #@log.debug "Ping Pong #{unpacked}"
         object = unzipped_input[0...5]
       
         #debug
         if object==nil
-          $stderr.puts "bug flash on object"         
+          @log.debug "bug flash on object"
         end
       
       
         self.unzipped_output << object
       
         type = (info[1] == "3") ? "Ping" : "Pong"      
-        puts "[#{type} - #{self.name}] (#{info[2].to_i(16)})" if $LOG_LEVEL > 3
+        @log.debug "#{type} #{self.name} (#{info[2].to_i(16)})"
         self.unzipped_input = unzipped_input[5..-1]
       
         flush_unzipped_output()
@@ -629,7 +619,7 @@ def checkHaveiPad3Data(object)
       self.last_ref_id = object["refId"] 
     end
     
-    puts "[Info - Forwarding object to #{self.other_connection.name}] #{object["class"]}" if $LOG_LEVEL > 1
+    @log.info "Forwarding object to #{self.other_connection.name} #{object["class"]}"
     
     object_data = object.to_plist(:plist_format => CFPropertyList::List::FORMAT_BINARY)
 
@@ -654,16 +644,16 @@ def checkHaveiPad3Data(object)
   
   def prep_received_object(object)
     if object["refId"] == self.last_ref_id && @block_rest_of_session
-      puts "[Info - Dropping Object from Guzzoni] #{object["class"]}" if $LOG_LEVEL > 1
-      pp object if $LOG_LEVEL > 3
+      @log.info "Dropping Object from Guzzoni #{object["class"]}"
+      @log.debug object.pretty_print_inspect
       return nil
     end  
     
     #this comes as an reply from spire to set access token
     if(object["class"] == "CommandIgnored")
-			puts "[Info - SiriProxy] Just ignoring the Authentification Token"
+			@log.info "Just ignoring the Authentification Token"
       if self.other_connection.activation_token_recieved==true and self.other_connection.activation_token.aceid==object["refId"]
-        puts "[Info - SiriProxy] Letting the activation command ignored pass throught"
+        @log.info "Letting the activation command ignored pass throught"
       else  
         return nil
       end			
@@ -673,11 +663,11 @@ def checkHaveiPad3Data(object)
    
     if object["class"]=="CommandFailed" 
       @commandFailed=true
-      puts "[Warning - SiriProxy] Command Failed refid #{object["refId"]} and Creating? #{self.other_connection.createassistant}"
+      @log.warn "Command Failed refid #{object["refId"]} and Creating? #{self.other_connection.createassistant}"
     end#should join these
     if object["class"] == "CommandFailed" and self.other_connection.createassistant and self.other_connection.key != nil and @config.enable_auto_key_ban
       @key_dao.key_banned(self.other_connection.key)       
-      puts "[Warning - SiriProxy] The key [#{self.other_connection.key.id}] Marked as Banned! Still serving with validation..." 
+      @log.warn "The key [#{self.other_connection.key.id}] Marked as Banned! Still serving with validation..."
       #Should we close connections here? I
       self.close_connection()
       self.other_connection.close_connection()   
@@ -690,12 +680,12 @@ def checkHaveiPad3Data(object)
       #OMG !!!! This is what i needed! Now the 4s creates new keys every 30 secods
       if object["class"] == "CreateSessionInfoResponse" and object["properties"]["validityDuration"] != nil and self.other_connection.is_4S and @config.regenerate_interval != nil
         object["properties"]["validityDuration"] = @config.regenerate_interval #this timer can be customized
-        puts "[Exploit - SiriProxy] Command send to iPhone4s to regenerate multiple keys every [#{@config.regenerate_interval}] seconds !!!"
+        @log.info "Command send to iPhone4s to regenerate multiple keys every [#{@config.regenerate_interval}] seconds !!!"
       end
       #OMG !!!! This is what i needed! Now the iPad3 creates new keys every 30 secods
       if object["class"] == "CreateSessionInfoResponse" and object["properties"]["validityDuration"] != nil and  self.other_connection.is_iPad3 == true and @config.regenerate_interval != nil
         object["properties"]["validityDuration"] = @config.regenerate_interval #this timer can be customized
-        puts "[Exploit - SiriProxy] Command send to iPad3 to regenerate multiple keys every [#{@config.regenerate_interval}] seconds !!!"
+        @log.info "Command send to iPad3 to regenerate multiple keys every [#{@config.regenerate_interval}] seconds !!!"
       end
       
       #Lets record if Guzzoni sent the respose to create session
@@ -705,13 +695,13 @@ def checkHaveiPad3Data(object)
       
       #let record how many activation token get per key
       if object["class"]=="SetActivationToken" and self.name=="Guzzoni"  and self.other_connection.key!=nil
-        puts '[Info - SiriProxy] Recieved token'
-        pp object
+        @log.info "Recieved token: #{object.pretty_print_inspect}"
+
         @activation_token_recieved=true
         @activation_token=ActivationToken.new
         @activation_token.aceid=object["aceId"]
         @activation_token.data=object["properties"]["activationToken"]
-        pp @activation_token
+        @log.info @activation_token.pretty_print_inspect
         @keystats = @keystatistics_dao.get_key_stats(self.other_connection.key)
         if @keystats==nil
           @keystatistics_dao.insert(self.other_connection.key) 
@@ -719,7 +709,7 @@ def checkHaveiPad3Data(object)
         end
         @keystats.total_tokens_recieved += 1
         @keystatistics_dao.save_key_stats(@keystats)
-        pp @keystats
+        @log.info @keystats.pretty_print_inspect
       end
      
       #Lets record how many Finish speech requests are made without the activation token and not by creating witch may not include the token if max assistants are reached
@@ -740,13 +730,13 @@ def checkHaveiPad3Data(object)
           @keystats = @keystatistics_dao.get_key_stats(@key)
           @keystats.total_finishspeech_requests+=1
           @keystatistics_dao.save_key_stats(@keystats)
-          puts '[Info - SiriProxy] Recorded FinishSpeech'
-          pp @keystats
+          @log.info 'Recorded FinishSpeech'
+          @log.info @keystats.pretty_print_inspect
         elsif  @keystats.total_finishspeech_requests > @expiration_sesitivity #consider a dynamic number instead of 15 
           #here comes the ceck!          
           if @keystats.total_tokens_recieved==0
             @key_dao.validation_expired(@key) #probably expired
-            puts '[Key - SiriProxy] Probably the validation expired! '
+            @log.info "Key" { 'Probably the validation expired!' }
             sendemail(@config)
           else
             #reset them if no anomaly detected such as  expiration
@@ -757,7 +747,7 @@ def checkHaveiPad3Data(object)
         else
           @keystats.total_finishspeech_requests+=1
           @keystatistics_dao.save_key_stats(@keystats)
-          puts '[Info - SiriProxy] Recorded FinishSpeech'
+          @log.info 'Recorded FinishSpeech'
         end        
       end
       
@@ -766,7 +756,7 @@ def checkHaveiPad3Data(object)
       #Lets capture the unique ids for every appleid
       if object["class"]=="SetAssistantData" and self.validationData_avail==true #check this against validation  for the 4s 
         #this changes by language change also. Please consider re code
-        pp object if $LOG_LEVEL > 2
+        @log.debug object.pretty_print_inspect
         #work to be done here
         @client=Client.new     
         
@@ -806,7 +796,7 @@ def checkHaveiPad3Data(object)
             
             if object["properties"]["abSources"][i]["properties"]!=nil and object["properties"]["abSources"][i]["properties"]["accountName"]!=nil and object["properties"]["abSources"][i]["properties"]["accountName"]="Card" and object["properties"]["abSources"][i]["properties"]["accountIdentifier"]!=nil
              
-              puts object["properties"]["abSources"][i]["properties"]["accountIdentifier"] if $LOG_LEVEL > 2
+              @log.debug object["properties"]["abSources"][i]["properties"]["accountIdentifier"]
               @client.appleAccountid=object["properties"]["abSources"][i]["properties"]["accountIdentifier"]
                i=@absources_count # hehe lets see if this fixes some errors
             end
@@ -821,37 +811,37 @@ def checkHaveiPad3Data(object)
         @client.valid = "False" if @config.private_server
         @client.valid = "True"  unless @config.private_server
         #this must not be updated in onld clients from here
-        #pp @client    
+        #@log.debug @client.pretty_print_inspect
                
         #Lets put some auth here Log the clients even though they may not have access
         if @createassistant==true and @client!=nil 
-          puts 'Debug Step one of creating assistants' if $LOG_LEVEL > 2
-          puts 'Client is 'if $LOG_LEVEL > 2
-          pp @client if $LOG_LEVEL > 2
+          @log.debug 'Step one of creating assistants'
+          @log.info "Client is #{@client.pretty_print_inspect}"
+
           @oldclient = @clients_dao.check_duplicate(@client)
           
           if @oldclient==nil                   
             @clients_dao.insert(@client)
-            puts "[Client - SiriProxy] NEW Client [#{@client.appleAccountid}] and Valid=[#{@client.valid}] added To database"
+            @log.info "Client" { "NEW Client [#{@client.appleAccountid}] and Valid=[#{@client.valid}] added To database" }
             if @client.valid!='True' 
               self.close_connection()
               self.other_connection.close_connection()   
               self.validationData_avail=false #extra protection on alive packets
-              puts "[Authentification - Siriproxy] NEW Client [#{@client.appleAccountid}] is not Valid. Access denied!!!"
-              puts "[Authentification - Siriproxy] Dropping Connection"
+              @log.info "Authentication" { "NEW Client [#{@client.appleAccountid}] is not Valid. Access denied!!!" }
+              @log.info "Authentication" { "Dropping Connection" }
               return nil
             end    
           else            
             @oldclient.fname=@client.fname
             @oldclient.nickname=@client.nickname #in case he changes this            
             @clients_dao.update(@oldclient)
-            puts "[Client - SiriProxy] OLD Client changed settings [#{@oldclient.appleAccountid}]"              
+            @log.info "Client" { "OLD Client changed settings [#{@oldclient.appleAccountid}]" }
             if @oldclient.valid!='True' #make a perm ban
               self.close_connection()
               self.other_connection.close_connection()   
               self.validationData_avail=false #extra protection on alive packets
-              puts "[Authentification - Siriproxy] OLD Client [#{@client.appleAccountid}] is not Valid. Access denied!!!"
-              puts "[Authentification - Siriproxy] Dropping Connection"
+              @log.info "Authentification" { "OLD Client [#{@client.appleAccountid}] is not Valid. Access denied!!!" }
+              @log.info "Authentification" { "Dropping Connection" }
               return nil
             end
           end
@@ -862,19 +852,18 @@ def checkHaveiPad3Data(object)
         #changing and connecting
         if  @client!=nil and @loadedassistant!=nil and @loadedassistant!="" and @createassistant==false #will not enter here if creating!
           #need to get in here if changing upon creation is needed
-          puts "passed" if $LOG_LEVEL > 2
-          pp object if $LOG_LEVEL > 2
+          @log.debug "passed: #{object.pretty_print_inspect}"
           @oldclient = @clients_dao.check_duplicate(@client)
-          pp @oldclient if $LOG_LEVEL > 2
+          @log.debug "old client: #{@oldclient.pretty_print_inspect}"
           if @oldclient==nil #should never get in here exept on public                   
             @clients_dao.insert(@client)
-            puts "[Client - SiriProxy] NEW Client changed settings [#{@client.appleAccountid}] With Assistantid [#{@loadedassistant}]"              
+            @log.info "Client" { "NEW Client changed settings [#{@client.appleAccountid}] With Assistantid [#{@loadedassistant}]" }
                 
           else            
             @oldclient.fname=@client.fname
             @oldclient.nickname=@client.nickname #in case he changes this            
             @clients_dao.update(@oldclient)
-            puts "[Client - SiriProxy] OLD Client changed settings [#{@oldclient.appleAccountid}] With Assistantid [#{@loadedassistant}]"              
+            @log.client "Client" { "OLD Client changed settings [#{@oldclient.appleAccountid}] With Assistantid [#{@loadedassistant}]" }
             @client=@oldclient #hehe
           end
           
@@ -886,12 +875,12 @@ def checkHaveiPad3Data(object)
           @assistant.devicetype=@devicetype
           @assistant.last_ip=@clientip
           if @assistant_dao.check_duplicate(@assistant) #Should never  find a duplicate i think so
-            puts "[Info - SiriProxy] Duplicate Assistand ID. Assistant NOT saved"
+            @log.info "Duplicate Assistant ID. Assistant NOT saved"
             @assistant.last_ip=@clientip
             @assistant_dao.updateassistant(@userassistant)
           else
             @assistant_dao.createassistant(@assistant)
-            puts "[Info - SiriProxy] Inserted Assistant ID #{@assistant.assistantid} for client #{@client}"  
+            @log.info "Inserted Assistant ID #{@assistant.assistantid} for client #{@client}"
           end    
           #hehe
         end
@@ -903,42 +892,42 @@ def checkHaveiPad3Data(object)
       #inject validation
       if object["properties"]["validationData"] !=nil #&& !object["properties"]["validationData"].empty?
         if self.is_4S
-          puts "[Info - SiriProxy] Saving iPhone 4S validation Data"          
+          @log.info "Saving iPhone 4S validation Data"
           checkHave4SData(object)
         elsif self.is_iPad3
-          puts "[Info - SiriProxy] Saving iPad3 validation Data"          
+          @log.info "Saving iPad3 validation Data"
           checkHaveiPad3Data(object)
         else
           get_validationData(object)
           if self.validationData_avail
-            puts "[Info - SiriProxy] using saved validationData"            
+            @log.info "using saved validationData"
             object["properties"]["validationData"] = plist_blob(self.sessionValidationData)
           else
-            puts "[Info - SiriProxy] No Validation Data available :("            
+            @log.info "No Validation Data available :("
           end
         end
       end
       if object["properties"]["sessionValidationData"] !=nil #&& !object["properties"]["sessionValidationData"].empty? I was wrong both are needed
         if self.is_4S
-          puts "[Info -  SiriProxy] using iPhone 4S validationData and saving it"         
+          @log.info " using iPhone 4S validationData and saving it"
           checkHave4SData(object)
         elsif self.is_iPad3
-          puts "[Info - SiriProxy] Using iPad3 validationData and saving it"          
+          @log.info "Using iPad3 validationData and saving it"
           checkHaveiPad3Data(object)
         else
           get_validationData(object)
           if  self.validationData_avail
-            puts "[Info - SiriProxy] using saved sessionvalidationData"
+            @log.info "using saved sessionvalidationData"
             object["properties"]["sessionValidationData"] = plist_blob(self.sessionValidationData)  
           else
-            puts "[Info - SiriProxy] no validationData available :("           
+            @log.info "no validationData available :("
           end
         end
       end
       if object["properties"]["speechId"] !=nil&&object["properties"]["assistantId"] !=nil
         #revomed saving speechid 
         if object["properties"]["speechId"].empty? || object["properties"]["assistantId"].empty? #warning this is not usual maybe a device got banned
-          puts "[Warning - SiriProxy] This device is not set up!"				
+          @log.warn "This device is not set up!"
           self.speechId_avail=false #useless     
           self.assistantId_avail=false #useless
           #lets close the connection and even better maybe destroy the assisatnt
@@ -947,26 +936,26 @@ def checkHaveiPad3Data(object)
           self.speechId_avail=true #useless
           self.assistantId_avail=true #useless
           if object["class"]=="LoadAssistant"
-            puts "[Info - SiriProxy] Device has assistantId: #{object["properties"]["assistantId"]}"
-            puts "[Info - SiriProxy] Device has speechID: #{object["properties"]["speechId"]}" 
+            @log.info "Device has assistantId: #{object["properties"]["assistantId"]}"
+            @log.info "Device has speechID: #{object["properties"]["speechId"]}"
           end                    
           #Lets record the assistants, and verify users
           #will not get in here if the private is on and user is not valid
           #Also i know that the users are already checked but the double check comes only due to that i didnt have time to clean this up
           if  object["class"]=="AssistantCreated" and self.other_connection.key != nil   and self.other_connection.client!=nil and self.other_connection.createassistant==true
-            puts "[Info - SiriProxy] Creating new Assistant..."
-            pp object
+            @log.info "Creating new Assistant: #{object.pretty_print_inspect}"
+
             @assistant=Assistant.new
             @assistant.assistantid=object["properties"]["assistantId"]
             @assistant.speechid=object["properties"]["speechId"]
             @assistant.key_id=self.other_connection.key.id               
             @assistant.devicetype=self.other_connection.devicetype
             @assistant.last_ip=self.other_connection.clientip
-            pp self.other_connection.client if $LOG_LEVEL > 2
+            @log.debug self.other_connection.client.pretty_print_inspect
             
             if @assistant_dao.check_duplicate(@assistant) #Should never  find a duplicate i think so
               
-              puts "[Info - SiriProxy] Duplicate Assistant ID. Assistant NOT saved"
+              @log.info "Duplicate Assistant ID. Assistant NOT saved"
               
             else
               
@@ -978,8 +967,8 @@ def checkHaveiPad3Data(object)
                 @clients_dao.insert(self.other_connection.client)
                 @assistant.client_apple_account_id=self.other_connection.client.appleAccountid
                 @assistant_dao.createassistant(@assistant)
-                puts "[Client - SiriProxy] Created Assistant ID  #{@assistant.assistantid} using key [#{self.other_connection.key.id}]"              
-                puts "[Client - SiriProxy] NEW Client [#{self.other_connection.client.appleAccountid}] created Assistantid [#{@assistant.assistantid}]"              
+                @log.info "Created Assistant ID  #{@assistant.assistantid} using key [#{self.other_connection.key.id}]"
+                @log.info "NEW Client [#{self.other_connection.client.appleAccountid}] created Assistantid [#{@assistant.assistantid}]"
                 
               else 
                 @oldclient.fname=self.other_connection.client.fname
@@ -987,8 +976,8 @@ def checkHaveiPad3Data(object)
                 @clients_dao.update(@oldclient)
                 @assistant.client_apple_account_id=@oldclient.appleAccountid
                 @assistant_dao.createassistant(@assistant)
-                puts "[Client - SiriProxy] Created Assistant ID #{@assistant.assistantid} using key [#{self.other_connection.key.id}]"              
-                puts "[Client - SiriProxy] OLD Client [#{self.other_connection.client.appleAccountid}] created Assistantid [#{@assistant.assistantid}]"              
+                @log.info "Created Assistant ID #{@assistant.assistantid} using key [#{self.other_connection.key.id}]"
+                @log.info "OLD Client [#{self.other_connection.client.appleAccountid}] created Assistantid [#{@assistant.assistantid}]"
                
               end
             end
@@ -999,30 +988,28 @@ def checkHaveiPad3Data(object)
 
     end
     #end of injection        
-    puts "[Info - #{self.name}] Received Object: #{object["class"]}" if $LOG_LEVEL == 1
-    puts "[Info - #{self.name}] Received Object: #{object["class"]} (group: #{object["group"]})" if $LOG_LEVEL == 2
-    puts "[Info - #{self.name}] Received Object: #{object["class"]} (group: #{object["group"]}, ref_id: #{object["refId"]},ace_id: #{object["aceId"]})" if $LOG_LEVEL > 2    
-    puts "[Key -  #{self.name}] Recieved Object Using: Key id [#{@key.id}] and Instance Keyload[#{@key.keyload}]  " if @key!=nil &&self.validationData_avail!=false && $LOG_LEVEL >1 
-    pp object if $LOG_LEVEL > 3
+    @log.debug "#{@name} Received Object: #{object["class"]} (group: #{object["group"]}, ref_id: #{object["refId"]}, ace_id: #{object["aceId"]})"
+    @log.debug "#{@name} Recieved Object Using: Key id [#{@key.id}] and Instance Keyload[#{@key.keyload}]" if @key && self.validationData_avail != false
+    @log.debug object.pretty_print_inspect
    
     
     #keeping this for filters
     new_obj = received_object(object)
     #puts self.name
     if self.validationData_avail==false and self.name=='iPhone' and self.is_4S==false and self.is_iPad3==false
-      puts "[Protection - Siriproxy] Dropping Object from #{self.name}] #{object["class"]} due to no Validation or Authentification available" if $LOG_LEVEL >= 1      
-      puts '[Protection - Siriproxy] Closing both connections...'
+      @log.debug "Protection", { "Dropping Object from #{self.name}] #{object["class"]} due to no Validation or Authentification available" }
+      @log.warn "Protection" { 'Closing both connections...' }
       self.close_connection()
       self.other_connection.close_connection()      
      
       
-      pp object if $LOG_LEVEL > 3
+      @log.debug object.pretty_print_inspect
       return nil
     end    
     
     if new_obj == nil 
-      puts "[Info - Dropping Object from #{self.name}] #{object["class"]}" if $LOG_LEVEL > 1
-      pp object if $LOG_LEVEL > 3
+      @log.debug "Dropping Object from #{@name} #{object["class"]}"
+      @log.debug object.pretty_print_inspect
       return nil
     end
 

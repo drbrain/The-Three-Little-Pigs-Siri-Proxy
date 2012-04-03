@@ -5,6 +5,7 @@ class SiriProxy::PluginManager < Cora
   attr_accessor :plugins, :iphone_conn, :guzzoni_conn
   
   def initialize(config)
+    @log           = config.log
     @plugin_config = config.plugins
 
     load_plugins()
@@ -27,7 +28,7 @@ class SiriProxy::PluginManager < Cora
         @plugins << plugin
       end
     end
-    log "Plugins loaded: #{@plugins}"
+    @log.info "Plugin Manager", { "Plugins loaded: #{@plugins}" }
   end
 
   def process_filters(object, direction) 
@@ -39,7 +40,7 @@ class SiriProxy::PluginManager < Cora
     end
 
     plugins.each do |plugin|
-      #log "Processing filters on #{plugin} for '#{object["class"]}'"
+      #@log.info "Plugin manager" { "Processing filters on #{plugin} for '#{object["class"]}'" }
       new_obj = plugin.process_filters(object, direction)
       object = new_obj if(new_obj == false || new_obj.class == object_class) #prevent accidental poorly formed returns
       return nil if object == false #if any filter returns "false," then the object should be dropped
@@ -47,8 +48,7 @@ class SiriProxy::PluginManager < Cora
     #Often this indicates a bug in OUR code. So let's not send it to Apple. :-)
     
 		if((object["class"] == "CommandIgnored")&&(direction==:from_iphone))
-			puts "Maybe a Bug"
-      pp object      
+      @log.warn "Plugin Manager" { "Maybe a bug: #{object.pretty_print_inspect}"}
 			return nil
 		end
     
@@ -61,14 +61,14 @@ class SiriProxy::PluginManager < Cora
       self.guzzoni_conn.block_rest_of_session if result
       return result
     rescue Exception=>e
-      log "Plugin Crashed: #{e}"
+      @log.error "Plugin Manager" { "Plugin Crashed: #{e} (#{e.class})" }
       respond e.to_s, spoken: "a plugin crashed"
       return true 	 
     end  
   end
   
   def send_request_complete_to_iphone
-    log "Sending Request Completed"
+    @log.info "Plugin Manager" { "Sending Request Completed" }
     object = generate_request_completed(self.guzzoni_conn.last_ref_id)
     self.guzzoni_conn.inject_object_to_output_stream(object)
   end
@@ -79,9 +79,5 @@ class SiriProxy::PluginManager < Cora
   
   def no_matches
     return false
-  end
-  
-  def log(text)
-    puts "[Info - Plugin Manager] #{text}" if $LOG_LEVEL >= 1
   end
 end
