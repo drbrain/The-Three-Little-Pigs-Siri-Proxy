@@ -12,8 +12,16 @@ class SiriProxy::Connection < EventMachine::Connection
     self.other_connection.last_ref_id = ref_id if other_connection.last_ref_id != ref_id
   end
   
-  def initialize
-    super
+  def initialize config
+    super()
+
+    @config            = config
+    @conf              = config.conf
+    @assistant_dao     = config.assistant_dao
+    @clients_dao       = config.clients_dao
+    @key_dao           = config.key_dao
+    @keystatistics_dao = config.keystatistics_dao
+
     self.processed_headers = false
     self.output_buffer = ""
     self.input_buffer = ""
@@ -46,7 +54,7 @@ class SiriProxy::Connection < EventMachine::Connection
     #puts pending_connect_timeout()    
     self.comm_inactivity_timeout=240 #very important and also depends on how many people connect!!!
     ##Checks For avalible keys before any object is loaded
-    available_keys=$keyDao.list4Skeys().count
+    available_keys = @key_dao.list4Skeys().count
     if available_keys > 0
       self.validationData_avail = true      
     else 
@@ -80,14 +88,14 @@ class SiriProxy::Connection < EventMachine::Connection
       key4s.banned='False'
       key4s.expired='False'
       key4s.iPad3='False'
-      if $keyDao.check_duplicate(key4s)
+      if @key_dao.check_duplicate(key4s)
         puts "[Info - SiriProxy] Duplicate Validation Data. Key NOT saved"
       else
-        $keyDao.insert(key4s)
+        @key_dao.insert(key4s)
         puts "[Info - SiriProxy] Keys written to Database"        
         #also unban all keys available.
         if $APP_CONFIG.private_server=="ON" or  $APP_CONFIG.private_server=="on"
-          $keyDao.unban_keys #unBan because a key was inserted! should spoof enough
+          @key_dao.unban_keys #unBan because a key was inserted! should spoof enough
           puts "[Info - SiriProxy] New 4S Key added and keys set to unbanned"
         end
       end
@@ -119,14 +127,14 @@ def checkHaveiPad3Data(object)
       keyiPad3.banned='False'
       keyiPad3.expired='False'
       keyiPad3.iPad3='True'
-      if $keyDao.check_duplicate(keyiPad3)
+      if @key_dao.check_duplicate(keyiPad3)
         puts "[Info - SiriProxy] Duplicate Validation Data. Key NOT saved"
       else
-        $keyDao.insert(keyiPad3)
+        @key_dao.insert(keyiPad3)
         puts "[Info - SiriProxy] Keys written to Database"        
         #also unban all keys available.
         if $APP_CONFIG.private_server=="ON" or  $APP_CONFIG.private_server=="on"
-          $keyDao.unban_keys #unBan because a key was inserted! should spoof enough
+          @key_dao.unban_keys #unBan because a key was inserted! should spoof enough
           puts "[Info - SiriProxy] New iPad 3 Key added and keys set to unbanned"
         end
       end
@@ -144,17 +152,17 @@ def checkHaveiPad3Data(object)
         @createassistant=true 
         @assistant_found=false
         @key=Key.new     
-        @available_keys=$keyDao.list_4S_keys_for_new_assistant().count
+        @available_keys = @key_dao.list_4S_keys_for_new_assistant.count
         
-        if (@available_keys) > 0 and $keyDao.next_available_4S_for_new_assistant()!=nil 
+        if @available_keys > 0 and @key_dao.next_available_4S_for_new_assistant != nil 
           
           puts "[Key - SiriProxy] Keys available for Creation of Assistants [#{@available_keys}]"
-          @key=$keyDao.next_available_4S_for_new_assistant()
+          @key = @key_dao.next_available_4S_for_new_assistant
           puts "[Keys - SiriProxy] Key [#{@key.id}] Loaded from Database for Validation Data" 
           puts "[Keys - SiriProxy] Key [#{@key.id}] Loaded from Database for Validation Data For Object with aceid [#{object["aceId"]}] and class #{object["class"]}" if $LOG_LEVEL > 2
           @oldkeyload=@key.keyload          
           @key.keyload=@key.keyload+20  
-          $keyDao.setkeyload(@key) 
+          @key_dao.setkeyload(@key)
           puts "[Key - SiriProxy] Key with id[#{@key.id}] increased it's keyload from [#{@oldkeyload}] to [#{@key.keyload}]" 
           self.sessionValidationData= @key.sessionValidation	
           self.validationData_avail = true       
@@ -184,13 +192,13 @@ def checkHaveiPad3Data(object)
           @userassistant.assistantid=@loadedassistant
           @userassistant.speechid=@loadedspeechid  
           @userassistant.last_ip=@clientip 
-          @userassistant=$assistantDao.check_duplicate(@userassistant)  #check if there is a registerd assistant
+          @userassistant = @assistant_dao.check_duplicate(@userassistant)  #check if there is a registerd assistant
           
           if  @userassistant!=nil #If there is one then
             
             @userassistant.last_ip=@clientip
             puts "[Authentification - SiriProxy] Registered Assistant Found "
-            @user=$clientsDao.find_by_assistant(@userassistant) #find the user with that assistant            
+            @user = @clients_dao.find_by_assistant(@userassistant)
             
             if @user==nil #Incase this user doesnt exist!!!!!!! Bug or not complete transaction
                 
@@ -202,7 +210,7 @@ def checkHaveiPad3Data(object)
                 
             elsif @user.valid=='False' 
               
-              $assistantDao.updateassistant(@userassistant) # to update with last login and ip
+              @assistant_dao.updateassistant(@userassistant) # to update with last login and ip
               puts "[Authentification - SiriProxy] Access Denied!! -> Client name:[#{@user.fname}] nickname[#{@user.nickname}] appleid[#{@user.appleAccountid}] Connected "
               self.validationData_avail = false
               self.close_connection() #close connections
@@ -212,16 +220,16 @@ def checkHaveiPad3Data(object)
             elsif @user.valid=='True' #if its valid!!!
               
               @key=Key.new
-              @available_keys=$keyDao.list4Skeys().count      
+              @available_keys = @key_dao.list4Skeys.count      
               
               if (@available_keys) > 0
                 puts "[Key - SiriProxy] Keys available for Registered Only clients [#{@available_keys}]"
-                @key=$keyDao.next_available_4S() 
+                @key = @key_dao.next_available_4S
                 puts "[Keys - SiriProxy] Key [#{@key.id}] Loaded from Database for Validation Data" 
                 puts "[Keys - SiriProxy] Key [#{@key.id}] Loaded from Database for Validation Data For Object with aceid [#{object["aceId"]}] and class #{object["class"]}" if $LOG_LEVEL > 2
                 @oldkeyload=@key.keyload          
                 @key.keyload=@key.keyload+10  
-                $keyDao.setkeyload(@key) 
+                @key_dao.setkeyload(@key) 
                 puts "[Key - SiriProxy] Key with id[#{@key.id}] increased it's keyload from [#{@oldkeyload}] to [#{@key.keyload}]" 
                 self.sessionValidationData= @key.sessionValidation	
                 self.validationData_avail = true  
@@ -236,7 +244,7 @@ def checkHaveiPad3Data(object)
                 
               end
                 
-              $assistantDao.updateassistant(@userassistant)
+              @assistant_dao.updateassistant(@userassistant)
               puts "[Authentification - SiriProxy] Access Granted! -> Client name:[#{@user.fname}] nickname[#{@user.nickname}] appleid[#{@user.appleAccountid}] Connected "
               
             end
@@ -254,17 +262,17 @@ def checkHaveiPad3Data(object)
             else # if its a public server 
               
               @key=Key.new
-              @available_keys=$keyDao.list4Skeys().count      
+              @available_keys = @key_dao.list4Skeys.count      
               
               if (@available_keys) > 0
                 
                 puts "[Key - SiriProxy] Keys available for Public  [#{@available_keys}]"
-                @key=$keyDao.next_available_4S() 
+                @key = @key_dao.next_available_4S
                 puts "[Keys - SiriProxy] Key [#{@key.id}] Loaded from Database for Validation Data" 
                 puts "[Keys - SiriProxy] Key [#{@key.id}] Loaded from Database for Validation Data For Object with aceid [#{object["aceId"]}] and class #{object["class"]}" if $LOG_LEVEL > 2
                 @oldkeyload=@key.keyload          
                 @key.keyload=@key.keyload+10  
-                $keyDao.setkeyload(@key) 
+                @key_dao.setkeyload(@key)
                 puts "[Key - SiriProxy] Key with id[#{@key.id}] increased it's keyload from [#{@oldkeyload}] to [#{@key.keyload}]" 
                 self.sessionValidationData= @key.sessionValidation	
                 self.validationData_avail = true  
@@ -287,17 +295,17 @@ def checkHaveiPad3Data(object)
         else  #here now goes anything except these 2 objects let's let them pass the validation        
           
           @key=Key.new
-          @available_keys=$keyDao.list4Skeys().count      
+          @available_keys = @key_dao.list4Skeys.count
           
           if (@available_keys) > 0
                 
             puts "[Key - SiriProxy] Keys available for Public and Other than load and create assistant [#{@available_keys}]"
-            @key=$keyDao.next_available_4S() 
+            @key = @key_dao.next_available_4S
             puts "[Keys - SiriProxy] Key [#{@key.id}] Loaded from Database for Validation Data" 
             puts "[Keys - SiriProxy] Key [#{@key.id}] Loaded from Database for Validation Data For Object with aceid [#{object["aceId"]}] and class #{object["class"]}" if $LOG_LEVEL > 2
             @oldkeyload=@key.keyload          
             @key.keyload=@key.keyload+10  
-            $keyDao.setkeyload(@key) 
+            @key_dao.setkeyload(@key) 
             puts "[Key - SiriProxy] Key with id[#{@key.id}] increased it's keyload from [#{@oldkeyload}] to [#{@key.keyload}]" 
             self.sessionValidationData= @key.sessionValidation	
             self.validationData_avail = true  
@@ -384,20 +392,20 @@ def checkHaveiPad3Data(object)
         @devicetype="iPad 3 GSM"
       else # now seperates anything else exept 4s
         #we can close connections here .... and we can count them here       
-        puts "[Info - Siriproxy] Curent connections [#{$conf.active_connections}]"
+        puts "[Info - Siriproxy] Curent connections [#{@conf.active_connections}]"
         #Some code in order connections to depend on the evailable keys
         #if no keys then maximize the connections in order to prevent max connection reach and 4s not be able to connect
         #
-        @max_connections=$conf.max_connections
-        @keysavailable=$keyDao.list4Skeys().count   
+        @max_connections = @conf.max_connections
+        @keysavailable = @key_dao.list4Skeys.count
         
         if @keysavailable==0  #this is not needed anymore! will be removed
           @max_connections=700#max mem 
         elsif @keysavailable>0
-          @max_connections=$conf.max_connections * @keysavailable
+          @max_connections = @conf.max_connections * @keysavailable
         end
         
-        if $conf.active_connections>=@max_connections 
+        if @conf.active_connections >= @max_connections 
           self.close_connection() #close connections
           self.other_connection.close_connection() #close other          
           puts "[Warning - Siriproxy] Max Connections reached! Connections Closed...."
@@ -668,7 +676,7 @@ def checkHaveiPad3Data(object)
       puts "[Warning - SiriProxy] Command Failed refid #{object["refId"]} and Creating? #{self.other_connection.createassistant}"
     end#should join these
     if object["class"]=="CommandFailed" and self.other_connection.createassistant  and self.other_connection.key!=nil and ($APP_CONFIG.enable_auto_key_ban=='ON' or $APP_CONFIG.enable_auto_key_ban=='on')
-      $keyDao.key_banned(self.other_connection.key)       
+      @key_dao.key_banned(self.other_connection.key)       
       puts "[Warning - SiriProxy] The key [#{self.other_connection.key.id}] Marked as Banned! Still serving with validation..." 
       #Should we close connections here? I
       self.close_connection()
@@ -704,13 +712,13 @@ def checkHaveiPad3Data(object)
         @activation_token.aceid=object["aceId"]
         @activation_token.data=object["properties"]["activationToken"]
         pp @activation_token
-        @keystats=$keystatisticsDao.get_key_stats(self.other_connection.key)
+        @keystats = @keystatistics_dao.get_key_stats(self.other_connection.key)
         if @keystats==nil
-          $keystatisticsDao.insert(self.other_connection.key) 
-          @keystats=$keystatisticsDao.get_key_stats(self.other_connection.key)
+          @keystatistics_dao.insert(self.other_connection.key) 
+          @keystats = @keystatistics_dao.get_key_stats(self.other_connection.key)
         end
-        @keystats.total_tokens_recieved+=1
-        $keystatisticsDao.save_key_stats(@keystats)
+        @keystats.total_tokens_recieved += 1
+        @keystatistics_dao.save_key_stats(@keystats)
         pp @keystats
       end
      
@@ -726,29 +734,29 @@ def checkHaveiPad3Data(object)
         #if the device has a wrong assistant.plist then it will make constant finish speech and will break this code.
         #lets fix that 
         @finishspeech=true
-        @keystats=$keystatisticsDao.get_key_stats(@key)
+        @keystats = @keystatistics_dao.get_key_stats(@key)
         if @keystats==nil
-          $keystatisticsDao.insert(@key) 
-          @keystats=$keystatisticsDao.get_key_stats(@key)
+          @keystatistics_dao.insert(@key) 
+          @keystats = @keystatistics_dao.get_key_stats(@key)
           @keystats.total_finishspeech_requests+=1
-          $keystatisticsDao.save_key_stats(@keystats)
+          @keystatistics_dao.save_key_stats(@keystats)
           puts '[Info - SiriProxy] Recorded FinishSpeech'
           pp @keystats
         elsif  @keystats.total_finishspeech_requests > @expiration_sesitivity #consider a dynamic number instead of 15 
           #here comes the ceck!          
           if @keystats.total_tokens_recieved==0
-            $keyDao.validation_expired(@key) #probalby expired              
+            @key_dao.validation_expired(@key) #probably expired
             puts '[Key - SiriProxy] Probably the validation expired! '
             sendemail()
           else
             #reset them if no anomaly detected such as  expiration
             @keystats.total_finishspeech_requests=0
             @keystats.total_tokens_recieved=0
-            $keystatisticsDao.save_key_stats(@keystats)
+            @keystatistics_dao.save_key_stats(@keystats)
           end  
         else
           @keystats.total_finishspeech_requests+=1
-          $keystatisticsDao.save_key_stats(@keystats)
+          @keystatistics_dao.save_key_stats(@keystats)
           puts '[Info - SiriProxy] Recorded FinishSpeech'
         end        
       end
@@ -820,10 +828,10 @@ def checkHaveiPad3Data(object)
           puts 'Debug Step one of creating assistants' if $LOG_LEVEL > 2
           puts 'Client is 'if $LOG_LEVEL > 2
           pp @client if $LOG_LEVEL > 2
-          @oldclient=$clientsDao.check_duplicate(@client)          
+          @oldclient = @clients_dao.check_duplicate(@client)
           
           if @oldclient==nil                   
-            $clientsDao.insert(@client)
+            @clients_dao.insert(@client)
             puts "[Client - SiriProxy] NEW Client [#{@client.appleAccountid}] and Valid=[#{@client.valid}] added To database"
             if @client.valid!='True' 
               self.close_connection()
@@ -836,7 +844,7 @@ def checkHaveiPad3Data(object)
           else            
             @oldclient.fname=@client.fname
             @oldclient.nickname=@client.nickname #in case he changes this            
-            $clientsDao.update(@oldclient)
+            @clients_dao.update(@oldclient)
             puts "[Client - SiriProxy] OLD Client changed settings [#{@oldclient.appleAccountid}]"              
             if @oldclient.valid!='True' #make a perm ban
               self.close_connection()
@@ -856,16 +864,16 @@ def checkHaveiPad3Data(object)
           #need to get in here if changing upon creation is needed
           puts "passed" if $LOG_LEVEL > 2
           pp object if $LOG_LEVEL > 2
-          @oldclient=$clientsDao.check_duplicate(@client)
+          @oldclient = @clients_dao.check_duplicate(@client)
           pp @oldclient if $LOG_LEVEL > 2
           if @oldclient==nil #should never get in here exept on public                   
-            $clientsDao.insert(@client)
+            @clients_dao.insert(@client)
             puts "[Client - SiriProxy] NEW Client changed settings [#{@client.appleAccountid}] With Assistantid [#{@loadedassistant}]"              
                 
           else            
             @oldclient.fname=@client.fname
             @oldclient.nickname=@client.nickname #in case he changes this            
-            $clientsDao.update(@oldclient)
+            @clients_dao.update(@oldclient)
             puts "[Client - SiriProxy] OLD Client changed settings [#{@oldclient.appleAccountid}] With Assistantid [#{@loadedassistant}]"              
             @client=@oldclient #hehe
           end
@@ -877,12 +885,12 @@ def checkHaveiPad3Data(object)
           @assistant.key_id=@key.id #suspicius
           @assistant.devicetype=@devicetype
           @assistant.last_ip=@clientip
-          if  $assistantDao.check_duplicate(@assistant) #Should never  find a duplicate i think so
+          if @assistant_dao.check_duplicate(@assistant) #Should never  find a duplicate i think so
             puts "[Info - SiriProxy] Duplicate Assistand ID. Assistant NOT saved"
             @assistant.last_ip=@clientip
-            $assistantDao.updateassistant(@userassistant)
+            @assistant_dao.updateassistant(@userassistant)
           else
-            $assistantDao.createassistant(@assistant)
+            @assistant_dao.createassistant(@assistant)
             puts "[Info - SiriProxy] Inserted Assistant ID #{@assistant.assistantid} for client #{@client}"  
           end    
           #hehe
@@ -956,29 +964,29 @@ def checkHaveiPad3Data(object)
             @assistant.last_ip=self.other_connection.clientip
             pp self.other_connection.client if $LOG_LEVEL > 2
             
-            if  $assistantDao.check_duplicate(@assistant) #Should never  find a duplicate i think so
+            if @assistant_dao.check_duplicate(@assistant) #Should never  find a duplicate i think so
               
               puts "[Info - SiriProxy] Duplicate Assistant ID. Assistant NOT saved"
               
             else
               
-              @oldclient=$clientsDao.check_duplicate(self.other_connection.client)
+              @oldclient = @clients_dao.check_duplicate(self.other_connection.client)
 
               if @oldclient==nil
                 
                 # pp self.other_connection.client 
-                $clientsDao.insert(self.other_connection.client)
+                @clients_dao.insert(self.other_connection.client)
                 @assistant.client_apple_account_id=self.other_connection.client.appleAccountid
-                $assistantDao.createassistant(@assistant)
+                @assistant_dao.createassistant(@assistant)
                 puts "[Client - SiriProxy] Created Assistant ID  #{@assistant.assistantid} using key [#{self.other_connection.key.id}]"              
                 puts "[Client - SiriProxy] NEW Client [#{self.other_connection.client.appleAccountid}] created Assistantid [#{@assistant.assistantid}]"              
                 
               else 
                 @oldclient.fname=self.other_connection.client.fname
                 @oldclient.nickname=self.other_connection.client.nickname #in case he changes this      
-                $clientsDao.update(@oldclient)
+                @clients_dao.update(@oldclient)
                 @assistant.client_apple_account_id=@oldclient.appleAccountid
-                $assistantDao.createassistant(@assistant)
+                @assistant_dao.createassistant(@assistant)
                 puts "[Client - SiriProxy] Created Assistant ID #{@assistant.assistantid} using key [#{self.other_connection.key.id}]"              
                 puts "[Client - SiriProxy] OLD Client [#{self.other_connection.client.appleAccountid}] created Assistantid [#{@assistant.assistantid}]"              
                

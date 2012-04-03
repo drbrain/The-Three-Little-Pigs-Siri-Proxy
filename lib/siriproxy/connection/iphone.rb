@@ -2,8 +2,8 @@
 # This is the connection to the iPhone
 #####
 class SiriProxy::Connection::Iphone < SiriProxy::Connection
-  def initialize
-    $conf.active_connections = EM.connection_count          
+  def initialize config
+    config.conf.active_connections = EM.connection_count          
     puts "Create server for iPhone connection"
     super
     self.name = "iPhone"
