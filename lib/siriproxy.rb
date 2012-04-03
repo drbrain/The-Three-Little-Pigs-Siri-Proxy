@@ -14,7 +14,8 @@ end
 
 class SiriProxy
   
-  def initialize()
+  def initialize(config)
+    @config = config
     #Lets make the Ctrl+C a little more user friendly
     trap("INT") {quit_on_int}
     def quit_on_int
@@ -25,7 +26,7 @@ class SiriProxy
     
     
     # @todo shouldnt need this, make centralize logging instead
-    $LOG_LEVEL = $APP_CONFIG.log_level.to_i
+    $LOG_LEVEL = @config.log_level
     #Version support added
     puts "Initializing TLP version [#{SiriProxy::VERSION}]"
 
@@ -33,8 +34,8 @@ class SiriProxy
 EM.epoll
     EM.set_descriptor_table_size( 60000 )
 
-    #Database connection
-    my_db = db_connect
+    my_db = db_connect(@config.db_host, @config.db_user, @config.db_pass,
+                       @config.db_database)
 
     #initialize config
     @conf = ConfigProxy.instance
@@ -71,37 +72,39 @@ EM.epoll
     @clients_dao = ClientsDao.instance
     @clients_dao.connect_to_db(my_db)
 
-    @APP_CONFIG.assistant_dao     = @assistant_dao
-    @APP_CONFIG.clients_dao       = @clients_dao
-    @APP_CONFIG.conf              = @conf
-    @APP_CONFIG.key_dao           = @key_dao
-    @APP_CONFIG.keystatistics_dao = @keystatistics_dao
+    @config.assistant_dao     = @assistant_dao
+    @config.clients_dao       = @clients_dao
+    @config.conf              = @conf
+    @config.key_dao           = @key_dao
+    @config.keystatistics_dao = @keystatistics_dao
 
     #Print email config
-    if $APP_CONFIG.send_email=='ON' or $APP_CONFIG.send_email=='on'
+    if @config.send_email
       puts '[Info - SiriProxy] Email notifications are [ON]!'
     else
       puts '[Info - SiriProxy] Email notifications are [OFF]!'
     end
     
     #Print the server if its publc or not
-    if $APP_CONFIG.private_server=="ON" or $APP_CONFIG.private_server=="on"
+    if @config.private_server
       puts '[Info - SiriProxy] Private Server [ON]!'
     else
       puts '[Info - SiriProxy] Private Server [OFF]!'
     end
     #Set default to revent errors.
-    if $APP_CONFIG.happy_hour_countdown==nil
+    if @config.happy_hour_countdown==nil
       puts '[Info - SiriProxy] Happy Hour Countdown not set in config.yml. Using default'
-      $APP_CONFIG.happy_hour_countdown = 21600
+      @config.happy_hour_countdown = 21600
     end
     #Start The EventMacine
     EventMachine.run do
       begin
-        puts "Starting SiriProxy on port #{$APP_CONFIG.port}.."
-        EventMachine::start_server('0.0.0.0', $APP_CONFIG.port, SiriProxy::Connection::Iphone, $APP_CONFIG) { |conn|
+        port = @config.port
+
+        puts "Starting SiriProxy on port #{port}.."
+        EventMachine::start_server('0.0.0.0', port, SiriProxy::Connection::Iphone, @config) { |conn|
           $stderr.puts "start conn #{conn.inspect}" if $LOG_LEVEL > 3
-          conn.plugin_manager = SiriProxy::PluginManager.new()
+          conn.plugin_manager = SiriProxy::PluginManager.new(@config)
           conn.plugin_manager.iphone_conn = conn
         }
    
@@ -116,7 +119,7 @@ EM.epoll
            @totalkeysexpired = @key_dao.expire_24h_hour_keys
            puts @totalkeysexpired
            for i in (0...@totalkeysexpired)
-               sendemail()
+               sendemail(@config)
            end
           
            @keystatistics_dao.delete_keystats
@@ -140,18 +143,18 @@ EM.epoll
           statistics.uptime += @timer
           statistics.happy_hour_elapsed += @timer
           #if there is autokeyban to off there is no need for happy hour
-          if $APP_CONFIG.enable_auto_key_ban=='OFF' or $APP_CONFIG.enable_auto_key_ban=='OFF'
+          unless @config.enable_auto_key_ban
             statistics.happy_hour_elapsed = 0
           end
           
           #Happy hour enabler only if autokeyban is on
-          if statistics.happy_hour_elapsed > $APP_CONFIG.happy_hour_countdown and ($APP_CONFIG.enable_auto_key_ban == 'ON' or $APP_CONFIG.enable_auto_key_ban == 'on') and @unbanned == false
+          if statistics.happy_hour_elapsed > @config.happy_hour_countdown and @config.enable_auto_key_ban and @unbanned == false
             @key_dao.unban_keys
            @unbanned=true
             puts "[Happy hour - SiriProxy] Unbanning Keys and Doors are open"
           end
           #only when autokeyban is on
-          if statistics.happy_hour_elapsed > ($APP_CONFIG.happy_hour_countdown + 300) and ($APP_CONFIG.enable_auto_key_ban == 'ON' or $APP_CONFIG.enable_auto_key_ban == 'on') and @unbanned == true
+          if statistics.happy_hour_elapsed > (@config.happy_hour_countdown + 300) and @config.enable_auto_key_ban and @unbanned == true
             @key_dao.ban_keys
             puts "[Happy hour - SiriProxy] Banning Keys and Doors are Closed"
             statistics.happy_hour_elapsed = 0
@@ -191,7 +194,7 @@ EM.epoll
         }
       rescue RuntimeError => err
         if err.message == "no acceptor"
-          raise "Cannot start the server on port #{$APP_CONFIG.port} - are you root, or have another process on this port already?"
+          raise "Cannot start the server on port #{port} - are you root, or have another process on this port already?"
         else
           raise
         end

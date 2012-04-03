@@ -1,14 +1,9 @@
 # -*- encoding : utf-8 -*-
 require 'mysql'
-#DATABASE CONNECTION 
-DB_HOST=$APP_CONFIG.db_host
-DB_USER=$APP_CONFIG.db_user
-DB_PASS=$APP_CONFIG.db_pass
-DB_DATABASE=$APP_CONFIG.db_database
 
-def db_connect() 
+def db_connect(host, user, pass, database)
 		begin
-			db_connection=Mysql.real_connect(DB_HOST, DB_USER, DB_PASS, DB_DATABASE)
+			db_connection=Mysql.real_connect(host, user, pass, database)
 			#db_connection.autocommit(false);
 			puts "Mysql Server version: " + db_connection.get_server_info+ "\nConnection and dataset ok"
 			return db_connection

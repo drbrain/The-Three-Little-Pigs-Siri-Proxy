@@ -94,7 +94,7 @@ class SiriProxy::Connection < EventMachine::Connection
         @key_dao.insert(key4s)
         puts "[Info - SiriProxy] Keys written to Database"        
         #also unban all keys available.
-        if $APP_CONFIG.private_server=="ON" or  $APP_CONFIG.private_server=="on"
+        if @config.private_server
           @key_dao.unban_keys #unBan because a key was inserted! should spoof enough
           puts "[Info - SiriProxy] New 4S Key added and keys set to unbanned"
         end
@@ -133,7 +133,7 @@ def checkHaveiPad3Data(object)
         @key_dao.insert(keyiPad3)
         puts "[Info - SiriProxy] Keys written to Database"        
         #also unban all keys available.
-        if $APP_CONFIG.private_server=="ON" or  $APP_CONFIG.private_server=="on"
+        if @config.private_server
           @key_dao.unban_keys #unBan because a key was inserted! should spoof enough
           puts "[Info - SiriProxy] New iPad 3 Key added and keys set to unbanned"
         end
@@ -251,7 +251,7 @@ def checkHaveiPad3Data(object)
             
           else #if no assistant registed found 
             
-            if $APP_CONFIG.private_server=="ON" or  $APP_CONFIG.private_server=="on"
+            if @config.private_server
               
               puts "[Authentification - SiriProxy] Assistant [#{@loadedassistant}] is not registered. Banning Connection"
               self.validationData_avail = false
@@ -675,7 +675,7 @@ def checkHaveiPad3Data(object)
       @commandFailed=true
       puts "[Warning - SiriProxy] Command Failed refid #{object["refId"]} and Creating? #{self.other_connection.createassistant}"
     end#should join these
-    if object["class"]=="CommandFailed" and self.other_connection.createassistant  and self.other_connection.key!=nil and ($APP_CONFIG.enable_auto_key_ban=='ON' or $APP_CONFIG.enable_auto_key_ban=='on')
+    if object["class"] == "CommandFailed" and self.other_connection.createassistant and self.other_connection.key != nil and @config.enable_auto_key_ban
       @key_dao.key_banned(self.other_connection.key)       
       puts "[Warning - SiriProxy] The key [#{self.other_connection.key.id}] Marked as Banned! Still serving with validation..." 
       #Should we close connections here? I
@@ -688,14 +688,14 @@ def checkHaveiPad3Data(object)
     if object["properties"] != nil  
       
       #OMG !!!! This is what i needed! Now the 4s creates new keys every 30 secods
-      if object["class"]=="CreateSessionInfoResponse" and object["properties"]["validityDuration"]!=nil and  self.other_connection.is_4S==true and $APP_CONFIG.regenerate_interval!=nil
-        object["properties"]["validityDuration"]=$APP_CONFIG.regenerate_interval #this timer can be customized
-        puts "[Exploit - SiriProxy] Command send to iPhone4s to regenerate multiple keys every [#{$APP_CONFIG.regenerate_interval}] seconds !!!"
+      if object["class"] == "CreateSessionInfoResponse" and object["properties"]["validityDuration"] != nil and self.other_connection.is_4S and @config.regenerate_interval != nil
+        object["properties"]["validityDuration"] = @config.regenerate_interval #this timer can be customized
+        puts "[Exploit - SiriProxy] Command send to iPhone4s to regenerate multiple keys every [#{@config.regenerate_interval}] seconds !!!"
       end
       #OMG !!!! This is what i needed! Now the iPad3 creates new keys every 30 secods
-      if object["class"]=="CreateSessionInfoResponse" and object["properties"]["validityDuration"]!=nil and  self.other_connection.is_iPad3==true and $APP_CONFIG.regenerate_interval!=nil
-        object["properties"]["validityDuration"]=$APP_CONFIG.regenerate_interval #this timer can be customized
-        puts "[Exploit - SiriProxy] Command send to iPad3 to regenerate multiple keys every [#{$APP_CONFIG.regenerate_interval}] seconds !!!"
+      if object["class"] == "CreateSessionInfoResponse" and object["properties"]["validityDuration"] != nil and  self.other_connection.is_iPad3 == true and @config.regenerate_interval != nil
+        object["properties"]["validityDuration"] = @config.regenerate_interval #this timer can be customized
+        puts "[Exploit - SiriProxy] Command send to iPad3 to regenerate multiple keys every [#{@config.regenerate_interval}] seconds !!!"
       end
       
       #Lets record if Guzzoni sent the respose to create session
@@ -725,9 +725,9 @@ def checkHaveiPad3Data(object)
       #Lets record how many Finish speech requests are made without the activation token and not by creating witch may not include the token if max assistants are reached
       if object["class"]=="FinishSpeech" and self.name=="iPhone" and  self.other_connection.activation_token_recieved==false and @key!=nil and self.validationData_avail==true and  @createassistant==false and @finishspeech==false
         
-        if  $APP_CONFIG.expiration_sesitivity!=nil and $APP_CONFIG.expiration_sesitivity > 0
+        if @config.expiration_sesitivity != nil and @config.expiration_sesitivity > 0
        
-          @expiration_sesitivity=$APP_CONFIG.expiration_sesitivity
+          @expiration_sesitivity = @config.expiration_sesitivity
         else
           @expiration_sesitivity=5 #default value
         end
@@ -747,7 +747,7 @@ def checkHaveiPad3Data(object)
           if @keystats.total_tokens_recieved==0
             @key_dao.validation_expired(@key) #probably expired
             puts '[Key - SiriProxy] Probably the validation expired! '
-            sendemail()
+            sendemail(@config)
           else
             #reset them if no anomaly detected such as  expiration
             @keystats.total_finishspeech_requests=0
@@ -817,9 +817,9 @@ def checkHaveiPad3Data(object)
         
         @client.appleAccountid="NA" if @client.appleAccountid==nil
         
-        @client.valid="True" #needed if config in empy for the below
-        @client.valid="False" if $APP_CONFIG.private_server=="ON" or $APP_CONFIG.private_server=="on"     
-        @client.valid="True" if $APP_CONFIG.private_server=="OFF" or $APP_CONFIG.private_server=="off"
+        @client.valid = "True" #needed if config in empty for the below
+        @client.valid = "False" if @config.private_server
+        @client.valid = "True"  unless @config.private_server
         #this must not be updated in onld clients from here
         #pp @client    
                

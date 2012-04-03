@@ -4,14 +4,16 @@ require 'pp'
 class SiriProxy::PluginManager < Cora
   attr_accessor :plugins, :iphone_conn, :guzzoni_conn
   
-  def initialize()
+  def initialize(config)
+    @plugin_config = config.plugins
+
     load_plugins()
   end
   
   def load_plugins()
     @plugins = []
-    if $APP_CONFIG.plugins
-      $APP_CONFIG.plugins.each do |pluginConfig|
+    if @plugin_config
+      @plugin_config.each do |pluginConfig|
         if pluginConfig.is_a? String
           className = pluginConfig
           requireName = "siriproxy-#{className.downcase}"

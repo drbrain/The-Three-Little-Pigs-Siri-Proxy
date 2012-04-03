@@ -100,14 +100,14 @@ class SiriProxy::CommandLine
   end
     
   def start_server
-    proxy = SiriProxy.new
+    proxy = SiriProxy.new @config
     proxy.start()
   end
     
   def gen_certs
-    ca_name = $APP_CONFIG.ca_name ||= ""
-    server1 = $APP_CONFIG.server1 ||= ""
-    server2 = $APP_CONFIG.server2 ||= ""
+    ca_name = @config.ca_name ||= ""
+    server1 = @config.server1 ||= ""
+    server2 = @config.server2 ||= ""
     command = File.join(File.dirname(__FILE__), '..', "..", "scripts", 'gen_certs.sh')
     sp_root = File.join(File.dirname(__FILE__), '..', "..")
     puts `#{command} "#{sp_root}" "#{ca_name}" "#{server1}" "#{server2}"`
@@ -115,7 +115,8 @@ class SiriProxy::CommandLine
     
   def gen_tables
     require 'siriproxy/db_connection'
-    if dbh=db_connect()
+    if dbh = db_connect(@config.db_host, @config.db_user, @config.db_pass,
+                        @config.db_database)
       puts "DATABASE FOUND"
     else 
       puts "Could not connect to database"
@@ -224,7 +225,6 @@ class SiriProxy::CommandLine
     
   end
    
-   
   def update(directory=nil)
     if(directory)
       puts "=== Installing from '#{directory}' ==="
@@ -261,38 +261,39 @@ class SiriProxy::CommandLine
   private
     
   def parse_options
-    $APP_CONFIG = OpenStruct.new(YAML.load_file(File.expand_path('~/.siriproxy/config.yml')))
+    config_yml = File.expand_path('~/.siriproxy/config.yml')
+    @config = OpenStruct.new(YAML.load_file(config_yml))
     @branch = nil
     @option_parser = OptionParser.new do |opts|
       opts.on('-p', '--port PORT',     '[server]   port number for server (central or node)') do |port_num|
-        $APP_CONFIG.port = port_num
+        @config.port = port_num.to_i
       end
       opts.on('-l', '--log LOG_LEVEL', '[server]   The level of debug information displayed (higher is more)') do |log_level|
-        $APP_CONFIG.log_level = log_level
+        @config.log_level = log_level.to_i
       end
       opts.on('-b', '--branch BRANCH', '[update]   Choose the branch to update from (default: master)') do |branch|
         @branch = branch
       end
       opts.on('-n', '--name CA_NAME',  '[gencerts] Define a common name for the CA (default: "SiriProxyCA")') do |ca_name|
-        $APP_CONFIG.ca_name = ca_name
+        @config.ca_name = ca_name
       end 
       opts.on('-serv1', '--name SERVER1',  '[gencerts] Define a Server 1 for the CA (default: "guzzoni.apple.com")') do |server1|
-        $APP_CONFIG.server1 = server1
+        @config.server1 = server1
       end 
       opts.on('-serv2', '--name CA_NAME',  '[gencerts] Define a Server 2 for the CA (default: "your.siri.proxy.server.com")') do |server2|
-        $APP_CONFIG.server2 = server2
+        @config.server2 = server2
       end 
       opts.on('-host', '--db_host Hostname',  '[server] Define a host name for mysql (default: "localhost")') do |db_host|
-        $APP_CONFIG.db_host = db_host
+        @config.db_host = db_host
       end 
       opts.on('-U', '--db_user username',  '[server] Define a user name for mysql (default: "root")') do |db_user|
-        $APP_CONFIG.db_user = db_user
+        @config.db_user = db_user
       end 
       opts.on('-P', '--db_pass password',  '[server] Define a password for mysql (default: "password")') do |db_pass|
-        $APP_CONFIG.db_pass = db_pass
+        @config.db_pass = db_pass
       end 
       opts.on('-D', '--db_database database',  '[server] Define the database for mysql (default: "siri")') do |db_database|
-        $APP_CONFIG.db_database = db_database
+        @config.db_database = db_database
       end 
       opts.on_tail('-v', '--version',  '           show version') do
         require "siriproxy/version"
@@ -302,6 +303,13 @@ class SiriProxy::CommandLine
     end
     @option_parser.banner = BANNER
     @option_parser.parse!(ARGV)
+
+    @config.enable_auto_key_ban = %w[ON on].include? @config.enable_auto_key_ban
+    @config.private_server      = %w[ON on].include? @config.private_server
+    @config.send_email          = %w[ON on].include? @config.send_email
+
+    # for backwards compatibility
+    $APP_CONFIG = @config
   end
     
   def setup_bundler_path
